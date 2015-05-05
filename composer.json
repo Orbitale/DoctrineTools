@@ -1,0 +1,31 @@
+{
+    "name": "orbitale/doctrine-tools",
+    "description": "A pack of tools to use with Doctrine ORM",
+    "keywords": ["doctrine", "orm", "tools", "repository", "fixtures"],
+    "version": "0.1",
+    "type": "library",
+    "license": "MIT",
+    "homepage": "https://github.com/Orbitale/DoctrineTools",
+    "authors": [
+        {
+            "name": "Alex Rock Ancelet",
+            "email": "alex@orbitale.io",
+            "homepage": "http://www.orbitale.io/"
+        }
+    ],
+    "require": {
+        "php": ">=5.3.0",
+        "doctrine/orm": "~2.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "~4.4",
+        "satooshi/php-coveralls": "~0.6",
+        "doctrine/data-fixtures": "~1.0"
+    },
+    "suggest": {
+        "doctrine/data-fixtures": "To use the nice AbstractFixture class"
+    },
+    "autoload": {
+        "psr-4": { "Orbitale\\Component\\DoctrineTools\\" : "" }
+    }
+}
