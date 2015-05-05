@@ -10,7 +10,7 @@
 
 namespace Orbitale\Component\DoctrineTools;
 
-use Doctrine\ORM\EntityRepository as EntityRepository;
+use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Mapping\MappingException;
 use Doctrine\ORM\Query;
 
@@ -21,7 +21,7 @@ use Doctrine\ORM\Query;
  * in app/config.yml
  * doctrine:
  *     orm:
- *         default_repository_class: Orbitale\Component\DoctrineTools\Repository\BaseEntityRepository
+ *         default_repository_class: Orbitale\Component\DoctrineTools\BaseEntityRepository
  *
  * Many methods accept a "$indexBy" parameter. This parameter is used to modify the returned collection index.
  * If you specify the $indexBy parameter, the returned array will be indexed by the specified field.

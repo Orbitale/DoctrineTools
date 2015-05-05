@@ -23,7 +23,8 @@
         "doctrine/data-fixtures": "~1.0"
     },
     "suggest": {
-        "doctrine/data-fixtures": "To use the nice AbstractFixture class"
+        "doctrine/data-fixtures": "To use the nice AbstractFixture class",
+        "doctrine/doctrine-fixtures-bundle": "To use the AbstractFixture class inside a Symfony app"
     },
     "autoload": {
         "psr-4": { "Orbitale\\Component\\DoctrineTools\\" : "" }
