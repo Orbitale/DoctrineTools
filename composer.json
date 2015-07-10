@@ -2,7 +2,6 @@
     "name": "orbitale/doctrine-tools",
     "description": "A pack of tools to use with Doctrine ORM",
     "keywords": ["doctrine", "orm", "tools", "repository", "fixtures"],
-    "version": "0.1",
     "type": "library",
     "license": "MIT",
     "homepage": "https://github.com/Orbitale/DoctrineTools",
