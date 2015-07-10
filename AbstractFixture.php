@@ -17,6 +17,7 @@ use Doctrine\Common\Persistence\ObjectManager;
 use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Mapping\ClassMetadata;
+use Symfony\Component\PropertyAccess\PropertyAccess;
 
 /**
  * This class is used mostly for inserting "fixed" datas, especially with their primary keys forced on insert.
@@ -85,13 +86,19 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
 
         if ($newObject === true) {
 
+            $accessor = class_exists('Symfony\Component\PropertyAccess\PropertyAccess') ? PropertyAccess::createPropertyAccessor() : null;
+
             // If the datas are in an array, we instanciate a new object
             if (is_array($datas)) {
                 $class = $this->getEntityClass();
                 $obj = new $class;
-                // Force the use of a setter
                 foreach ($datas as $field => $value) {
-                    $obj->{'set'.ucfirst($field)}($value);
+                    if ($accessor) {
+                        $accessor->setValue($obj, $field, $value);
+                    } else {
+                        // Force the use of a setter if accessor is not available
+                        $obj->{'set'.ucfirst($field)}($value);
+                    }
                 }
             }
 
