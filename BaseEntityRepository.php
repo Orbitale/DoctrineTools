@@ -13,6 +13,7 @@ namespace Orbitale\Component\DoctrineTools;
 use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Mapping\MappingException;
 use Doctrine\ORM\Query;
+use Symfony\Component\PropertyAccess\PropertyAccess;
 
 /**
  * This class is a tool to be used with the Doctrine ORM.
@@ -44,11 +45,13 @@ class BaseEntityRepository extends EntityRepository
      */
     public function findAllRoot($indexBy = null)
     {
-        if ($indexBy && strpos($indexBy, '.') === false) {
-            $indexBy = 'object.'.$indexBy;
+        $datas = $this->createQueryBuilder('object')->getQuery()->getResult();
+
+        if ($datas && $indexBy) {
+            $datas = $this->sortCollection($datas, $indexBy);
         }
 
-        return $this->createQueryBuilder('object', $indexBy)->getQuery()->getResult();
+        return $datas;
     }
 
     /**
@@ -60,7 +63,13 @@ class BaseEntityRepository extends EntityRepository
      */
     public function findAllArray($indexBy = null)
     {
-        return $this->createQueryBuilder('object', $indexBy)->getQuery()->getArrayResult();
+        $datas = $this->createQueryBuilder('object', $indexBy)->getQuery()->getArrayResult();
+
+        if ($datas && $indexBy) {
+            $datas = $this->sortCollection($datas, $indexBy);
+        }
+
+        return $datas;
     }
 
     /**
@@ -74,7 +83,7 @@ class BaseEntityRepository extends EntityRepository
     {
         $datas = parent::findBy($criteria, $orderBy, $limit, $offset);
         if ($datas && $indexBy) {
-            $datas = $this->sortCollection($datas);
+            $datas = $this->sortCollection($datas, $indexBy);
         }
 
         return $datas;
@@ -82,17 +91,18 @@ class BaseEntityRepository extends EntityRepository
 
     /**
      * Alias for findAll, but adding the $indexBy argument.
+     * If you do not want the associated elements, please {@see BaseEntityRepository::findAllRoot}
      *
      * {@inheritdoc}
      *
      * @param string $indexBy The field to use as array key index.
      */
-    public function findAll($indexBy = false)
+    public function findAll($indexBy = null)
     {
         $datas = $this->findBy(array());
 
-        if ($datas && true === $indexBy) {
-            $datas = $this->sortCollection($datas);
+        if ($datas && $indexBy) {
+            $datas = $this->sortCollection($datas, $indexBy);
         }
 
         return $datas;
@@ -127,14 +137,12 @@ class BaseEntityRepository extends EntityRepository
      */
     public function getNumberOfElements()
     {
-        $qb = $this->_em->createQueryBuilder();
-        $qb->select('count(a)')
-           ->where('a.deleted = 0')
-           ->from($this->getEntityName(), 'a');
-
-        $count = $qb->getQuery()->getSingleScalarResult();
-
-        return $count;
+        return $this->_em->createQueryBuilder()
+            ->select('count(a)')
+            ->from($this->getEntityName(), 'a')
+            ->getQuery()
+            ->getSingleScalarResult();
+        ;
     }
 
     /**
@@ -143,23 +151,26 @@ class BaseEntityRepository extends EntityRepository
      * For "cleanest" uses, you'd better use a primary or unique key.
      *
      * @param object[] $collection  The collection to sort by index
-     * @param string   $indexBy     The field to use as array key index.
+     * @param string   $indexBy     The field to use as array key index. The special "true" or "_primary" values will use the single identifier field name from the metadatas.
      * @throws MappingException
      * @return array[]|object[]
      */
-    public function sortCollection($collection, $indexBy = '_primary')
+    public function sortCollection($collection, $indexBy = null)
     {
         $finalCollection = array();
         $currentObject   = current($collection);
+        $accessor        = class_exists('Symfony\Component\PropertyAccess\PropertyAccess') ? PropertyAccess::createPropertyAccessor() : null;
 
-        if ('_primary' === $indexBy) {
+        if ('_primary' === $indexBy || true === $indexBy) {
             $indexBy = $this->getClassMetadata()->getSingleIdentifierFieldName();
         }
 
         if (is_object($currentObject) && property_exists($currentObject, $indexBy) && method_exists($currentObject, 'get'.ucfirst($indexBy))) {
+
             // Sorts a list of objects only if the property and its getter exist
             foreach ($collection as $entity) {
-                $finalCollection[$entity->{'get'.ucfirst($indexBy)}()] = $entity;
+                $id = $accessor ? $accessor->getValue($entity, $indexBy) : $entity->{'get'.ucFirst($indexBy)};
+                $finalCollection[$id] = $entity;
             }
             return $finalCollection;
         }
