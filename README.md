@@ -4,6 +4,14 @@ Orbitale Doctrine Tools
 This library is composed of multiple tools to be used with the Doctrine ORM.
 
 
+### Documentation
+
+* [Installation](#installation)
+* [Usage](#usage)
+  * [Entity Repository](#entity-repository)
+  * [Doctrine Fixtures](#doctrine-fixtures)
+
+
 # Installation
 
 Simply install the library with [Composer](https://getcomposer.org):
@@ -84,15 +92,24 @@ class PostFixtures extends AbstractFixture
     }
     
     public function getObjects() {
-        return array(
-            array('id' => 1, 'title' => 'First post', 'description' => 'Lorem ipsum'),
-            array('id' => 2, 'title' => 'Second post', 'description' => 'muspi meroL'),
-        );
+        return [
+            ['id' => 1, 'title' => 'First post', 'description' => 'Lorem ipsum'],
+            ['id' => 2, 'title' => 'Second post', 'description' => 'muspi meroL'],
+        ];
     }
 
 }
 
 ```
+
+### Methods of the `AbstractFixture` class that can be overriden:
+
+* `getOrder()` to change the order in which the fixtures will be loaded.
+* `getReferencePrefix()` to add a reference in the Fixtures' batch so you can use them later.
+  References are stored as `{referencePrefix}-{id|__toString()}`.
+* `flushEveryXIterations()` to flush in batches instead of flushing only once at the end of all fixtures persist.
+* `searchForMatchingIds()` to check that an ID exists in database and therefore not insert it back if it does.
+* `disableLogger()` to disable SQL queries logging, useful to save memory at runtime.
 
 This way, 2 objects are automatically persisted in the database, and they're all identified with their ID.
 Also, if you run the symfony `app/console doctrine:fixtures:load` using the `--append` option, the IDs will be detected

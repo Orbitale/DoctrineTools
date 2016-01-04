@@ -1,4 +1,5 @@
 <?php
+
 /*
  * This file is part of the Orbitale DoctrineTools package.
  *
@@ -18,18 +19,19 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\EntityRepository;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Symfony\Component\PropertyAccess\PropertyAccess;
+use Symfony\Component\PropertyAccess\PropertyAccessor;
 
 /**
  * This class is used mostly for inserting "fixed" datas, especially with their primary keys forced on insert.
  * Two methods are mandatory to insert new datas, and you can create them both as indexed array or as objects.
  * Objects are directly persisted to the database, and once they're all, the EntityManager is flushed with all objects.
  * You can override the `getOrder` and `getReferencePrefix` for more flexibility on how to link fixtures together.
+ * Other methods can be overriden, notably `flushEveryXIterations` and `searchForMatchingIds`. See their docs to know more.
  *
  * @package Orbitale\Component\DoctrineTools
  */
 abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFixtureInterface
 {
-
     /**
      * @var EntityManager
      */
@@ -41,19 +43,74 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     private $repo;
 
     /**
+     * @var int
+     */
+    private $order;
+
+    /**
+     * @var string
+     */
+    private $entityClass;
+
+    /**
+     * @var PropertyAccessor
+     */
+    private $propertyAccessor;
+
+    /**
+     * @var null|string
+     */
+    private $referencePrefix;
+
+    /**
+     * @var bool
+     */
+    private $searchForMatchingIds = false;
+
+    /**
+     * @var int
+     */
+    private $numberOfIteratedObjects = 0;
+
+    /**
+     * @var int
+     */
+    private $flushEveryXIterations = 0;
+
+    public function __construct()
+    {
+        $this->order                 = $this->getOrder();
+        $this->flushEveryXIterations = $this->flushEveryXIterations();
+        $this->searchForMatchingIds  = $this->searchForMatchingIds();
+        $this->entityClass           = $this->getEntityClass();
+        $this->referencePrefix       = $this->getReferencePrefix();
+        $this->propertyAccessor      = class_exists('Symfony\Component\PropertyAccess\PropertyAccess') ? PropertyAccess::createPropertyAccessor() : null;
+    }
+
+    /**
      * {@inheritdoc}
      */
     public function load(ObjectManager $manager)
     {
         $this->manager = $manager;
 
-        $this->repo = $this->manager->getRepository($this->getEntityClass());
-
-        foreach ($this->getObjects() as $data) {
-            $this->fixtureObject($data);
+        if ($this->disableLogger()) {
+            $this->manager->getConnection()->getConfiguration()->setSQLLogger(null);
         }
 
-        $this->manager->flush();
+        $this->repo = $this->manager->getRepository($this->getEntityClass());
+
+        $this->numberOfIteratedObjects = 0;
+        foreach ($this->getObjects() as $data) {
+            $this->fixtureObject($data);
+            $this->numberOfIteratedObjects++;
+        }
+        $this->numberOfIteratedObjects = 0;
+
+        if (!$this->flushEveryXIterations) {
+            $this->manager->flush();
+            $this->manager->clear();
+        }
     }
 
     /**
@@ -61,7 +118,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      *
      * @param array|object $datas
      */
-    protected function fixtureObject($datas)
+    private function fixtureObject($datas)
     {
         // The ID is taken in account to force its use in the database.
         $id = (is_object($datas) && method_exists($datas, 'getId') && $datas->getId())
@@ -72,15 +129,15 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
         $newObject = false;
         $addRef = false;
 
-        // If the user specifies an ID
-        if ($id) {
-            // Checks that the object ID exists in database
+        // If the user specifies an ID and the fixture class wants it to be merged, we search for an object.
+        if ($id && $this->searchForMatchingIds) {
+            // Checks that the object ID exists in database.
             $obj = $this->repo->find($id);
             if ($obj) {
-                // If so, the object is not overwritten
+                // If so, the object is not overwritten.
                 $addRef = true;
             } else {
-                // Else, we create a new object
+                // Else, we create a new object.
                 $newObject = true;
             }
         } else {
@@ -89,23 +146,21 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
 
         if ($newObject === true) {
 
-            $accessor = class_exists('Symfony\Component\PropertyAccess\PropertyAccess') ? PropertyAccess::createPropertyAccessor() : null;
-
-            // If the datas are in an array, we instanciate a new object
+            // If the datas are in an array, we instanciate a new object.
             if (is_array($datas)) {
-                $class = $this->getEntityClass();
+                $class = $this->entityClass;
                 $obj = new $class;
                 foreach ($datas as $field => $value) {
-                    if ($accessor) {
-                        $accessor->setValue($obj, $field, $value);
+                    if ($this->propertyAccessor) {
+                        $this->propertyAccessor->setValue($obj, $field, $value);
                     } else {
-                        // Force the use of a setter if accessor is not available
+                        // Force the use of a setter if accessor is not available.
                         $obj->{'set'.ucfirst($field)}($value);
                     }
                 }
             }
 
-            // If the ID is set, we tell Doctrine to force the insertion of it
+            // If the ID is set, we tell Doctrine to force the insertion of it.
             if ($id) {
                 /** @var ClassMetadata $metadata */
                 $metadata = $this->manager->getClassMetaData(get_class($obj));
@@ -114,13 +169,47 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
 
             // And finally we persist the item
             $this->manager->persist($obj);
+
+            // If we need to flush it, then we do it too.
+            if (
+                $this->flushEveryXIterations
+                && $this->numberOfIteratedObjects
+                && $this->numberOfIteratedObjects % $this->flushEveryXIterations === 0
+            ) {
+                $this->manager->flush();
+                $this->manager->clear();
+            }
             $addRef = true;
         }
 
-        // If we have to add a reference, we set it
-        if ($addRef === true && $obj && $this->getReferencePrefix()) {
-            $this->addReference($this->getReferencePrefix().($id ?: (string) $obj), $obj);
+        // If we have to add a reference, we do it
+        if ($addRef === true && $obj && $this->referencePrefix) {
+            $this->addReference($this->referencePrefix.($id ?: (string) $obj), $obj);
         }
+
+        $obj = null;
+    }
+
+    /**
+     * Get the order of this fixture.
+     * Default null means 0, so the fixture will be run at the beginning in order of appearance.
+     * Is to be overriden if used.
+     *
+     * @return int
+     */
+    public function getOrder() {
+        return $this->order;
+    }
+
+    /**
+     * If true, the SQL logger will be disabled, and therefore will avoid memory leaks and save memory during execution.
+     * Very useful for big batches of entities.
+     *
+     * @return bool
+     */
+    protected function disableLogger()
+    {
+        return false;
     }
 
     /**
@@ -128,33 +217,46 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      * If returns `null`, no reference will be created for the object.
      * NOTE: To create references of an object, it must have an ID, and if not, implement __toString(), because
      *   each object is referenced BEFORE flushing the database.
-     * Is to be overriden if used.
+     * NOTE2: If you specified a "flushEveryXIterations" value, then the object will be provided with an ID every time.
      *
      * @return string|null
      */
     protected function getReferencePrefix() {
-        return null;
+        return $this->referencePrefix;
     }
 
     /**
-     * Get the order of this fixture.
-     * Is to be overriden if used.
+     * If specified, the entity manager will be flushed every X times, depending on your specified values.
+     * Default is null, so the database is flushed only at the end of all persists.
      *
-     * @return int
+     * @return bool
      */
-    public function getOrder() {
-        return 0;
+    protected function flushEveryXIterations()
+    {
+        return $this->flushEveryXIterations;
     }
 
     /**
-     * Returns the class of the entity you're managing
+     * If true and an ID is specified, will execute a $manager->find($id) in the database.
+     * By default this var is true.
+     * Be careful, if you set it to false you may have "duplicate entry" errors if your database is already populated.
+     *
+     * @return bool
+     */
+    protected function searchForMatchingIds()
+    {
+        return $this->searchForMatchingIds;
+    }
+
+    /**
+     * Returns the class of the entity you're managing.
      *
      * @return string
      */
     protected abstract function getEntityClass();
 
     /**
-     * Returns a list of objects to
+     * Returns a list of objects to insert in the database.
      *
      * @return ArrayCollection|object[]
      */
