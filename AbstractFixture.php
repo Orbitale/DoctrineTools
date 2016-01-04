@@ -63,8 +63,11 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      */
     protected function fixtureObject($datas)
     {
-        // The ID is taken in account to force its use in the database
-        $id = isset($datas['id']) ? $datas['id'] : (is_object($datas) && method_exists($datas, 'getId') && $datas->getId() ? $datas->getId() : null);
+        // The ID is taken in account to force its use in the database.
+        $id = (is_object($datas) && method_exists($datas, 'getId') && $datas->getId())
+            ? $datas->getId()
+            : (isset($datas['id']) ? $datas['id'] : null);
+
         $obj = null;
         $newObject = false;
         $addRef = false;
