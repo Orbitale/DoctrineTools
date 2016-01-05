@@ -65,7 +65,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     /**
      * @var bool
      */
-    private $searchForMatchingIds = false;
+    private $searchForMatchingIds = true;
 
     /**
      * @var int
