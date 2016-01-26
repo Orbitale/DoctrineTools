@@ -70,6 +70,11 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     /**
      * @var int
      */
+    private $totalNumberOfObjects = 0;
+
+    /**
+     * @var int
+     */
     private $numberOfIteratedObjects = 0;
 
     /**
@@ -100,14 +105,22 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
 
         $this->repo = $this->manager->getRepository($this->getEntityClass());
 
+        $objects = $this->getObjects();
+
+        $this->totalNumberOfObjects = count($objects);
+
         $this->numberOfIteratedObjects = 0;
-        foreach ($this->getObjects() as $data) {
+        foreach ($objects as $data) {
             $this->fixtureObject($data);
             $this->numberOfIteratedObjects++;
         }
-        $this->numberOfIteratedObjects = 0;
 
-        if (!$this->flushEveryXIterations) {
+        // Flush if we performed a "whole" fixture load,
+        //  or if we flushed with batches but have not flushed all items.
+        if (
+            !$this->flushEveryXIterations
+            || ($this->flushEveryXIterations && $this->numberOfIteratedObjects !== $this->totalNumberOfObjects)
+        ) {
             $this->manager->flush();
             $this->manager->clear();
         }
