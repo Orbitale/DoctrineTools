@@ -164,6 +164,12 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
                 $class = $this->entityClass;
                 $obj = new $class;
                 foreach ($datas as $field => $value) {
+
+                    // If the value is a callable we execute it and inject the fixture object and the manager.
+                    if (is_callable($value, true)) {
+                        $value = $value($this, $this->manager);
+                    }
+
                     if ($this->propertyAccessor) {
                         $this->propertyAccessor->setValue($obj, $field, $value);
                     } else {

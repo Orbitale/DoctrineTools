@@ -102,6 +102,70 @@ class PostFixtures extends AbstractFixture
 
 ```
 
+### Using a callable to get a reference
+
+When you have self-referencing relationships, you may need a reference of an object that may have already been persisted.
+
+For this, first, you should set the `flushEveryXIterations` option to `1` (view below) to allow flushing on every iteration.
+
+And next, you can set a `callable` element as the value of your object so you can retrieve manually the reference from the
+ injected `AbstractFixture` object as first argument.
+
+The `ObjectManager` is also injected as second argument in case you need to do some specific requests or query through another
+ table.
+
+Example here:
+
+```php
+<?php
+
+namespace AppBundle\DataFixtures\ORM;
+
+use Orbitale\Component\DoctrineTools\AbstractFixture;
+use Doctrine\Common\Persistence\ObjectManager;
+
+class PostFixtures extends AbstractFixture
+{
+
+    public function getEntityClass() {
+        return 'AppBundle\Entity\Post';
+    }
+
+    /**
+     * With this, we can retrieve a Post reference with this method:
+     * $this->getReference('posts-1');
+     * where '1' is the post id.
+     */
+    public function getReferencePrefix() {
+        return 'posts-';
+    }
+
+    /**
+     * Set this to 1 so the first post is always persisted before the next one.
+     */
+    public function flushOnEveryXIterations() {
+        return 1;
+    }
+
+    public function getObjects() {
+        return [
+            ['id' => 1, 'title' => 'First post', 'parent' => null],
+            [
+                'id' => 2,
+                'title' => 'Second post',
+                'parent' => function(AbstractFixture $fixture, ObjectManager $manager) {
+                    return $fixture->getReference('posts-1');
+                },
+            ],
+        ];
+    }
+
+}
+
+```
+
+This allows perfect synchronicity when dealing with self-referencing relations.
+
 ### Methods of the `AbstractFixture` class that can be overriden:
 
 * `getOrder()` to change the order in which the fixtures will be loaded.
