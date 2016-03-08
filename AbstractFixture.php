@@ -166,8 +166,8 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
                 foreach ($datas as $field => $value) {
 
                     // If the value is a callable we execute it and inject the fixture object and the manager.
-                    if (is_callable($value, true)) {
-                        $value = $value($this, $this->manager);
+                    if ($value instanceof \Closure) {
+                        $value = $value($obj, $this, $this->manager);
                     }
 
                     if ($this->propertyAccessor) {

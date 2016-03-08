@@ -108,10 +108,10 @@ When you have self-referencing relationships, you may need a reference of an obj
 
 For this, first, you should set the `flushEveryXIterations` option to `1` (view below) to allow flushing on every iteration.
 
-And next, you can set a `callable` element as the value of your object so you can retrieve manually the reference from the
- injected `AbstractFixture` object as first argument.
+And next, you can set a `callable` element as the value of your object so you can interact manually with the injected object
+ as 1st argument, and the `AbstractFixture` object as 2nd argument.
 
-The `ObjectManager` is also injected as second argument in case you need to do some specific requests or query through another
+The `ObjectManager` is also injected as 3rd argument in case you need to do some specific requests or query through another
  table.
 
 Example here:
@@ -153,8 +153,10 @@ class PostFixtures extends AbstractFixture
             [
                 'id' => 2,
                 'title' => 'Second post',
-                'parent' => function(AbstractFixture $fixture, ObjectManager $manager) {
-                    return $fixture->getReference('posts-1');
+                'parent' => function(Post $object, AbstractFixture $fixture, ObjectManager $manager) {
+                    $ref = $fixture->getReference('posts-1');
+                    $object->setParent($ref); // This is often needed if you don't use cascade persist
+                    return $ref;
                 },
             ],
         ];
