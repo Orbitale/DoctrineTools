@@ -22,8 +22,8 @@ use Symfony\Component\PropertyAccess\PropertyAccess;
 use Symfony\Component\PropertyAccess\PropertyAccessor;
 
 /**
- * This class is used mostly for inserting "fixed" datas, especially with their primary keys forced on insert.
- * Two methods are mandatory to insert new datas, and you can create them both as indexed array or as objects.
+ * This class is used mostly for inserting "fixed" data, especially with their primary keys forced on insert.
+ * Two methods are mandatory to insert new data, and you can create them both as indexed array or as objects.
  * Objects are directly persisted to the database, and once they're all, the EntityManager is flushed with all objects.
  * You can override the `getOrder` and `getReferencePrefix` for more flexibility on how to link fixtures together.
  * Other methods can be overriden, notably `flushEveryXIterations` and `searchForMatchingIds`. See their docs to know more.
@@ -129,14 +129,26 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     /**
      * Creates the object and persist it in database.
      *
-     * @param array|object $datas
+     * @param array|object $data
      */
-    private function fixtureObject($datas)
+    private function fixtureObject($data)
     {
+        /** @var ClassMetadata $metadata */
+        $metadata = $this->manager->getClassMetadata($this->getEntityClass());
+
+        // Can be either one or multiple identifiers.
+        $identifier = $metadata->getIdentifier();
+
         // The ID is taken in account to force its use in the database.
-        $id = (is_object($datas) && method_exists($datas, 'getId') && $datas->getId())
-            ? $datas->getId()
-            : (isset($datas['id']) ? $datas['id'] : null);
+        $id = [];
+        foreach ($identifier as $key) {
+            $id[$key] = $this->getPropertyFromData($data, $key);
+        }
+
+        // Make sure id is correctly ready for $repo->find($id).
+        if (0 === count($id)) {
+            $id = null;
+        }
 
         $obj = null;
         $newObject = false;
@@ -145,7 +157,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
         // If the user specifies an ID and the fixture class wants it to be merged, we search for an object.
         if ($id && $this->searchForMatchingIds) {
             // Checks that the object ID exists in database.
-            $obj = $this->repo->find($id);
+            $obj = $this->repo->findOneBy($id);
             if ($obj) {
                 // If so, the object is not overwritten.
                 $addRef = true;
@@ -159,11 +171,11 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
 
         if ($newObject === true) {
 
-            // If the datas are in an array, we instanciate a new object.
-            if (is_array($datas)) {
+            // If the data are in an array, we instanciate a new object.
+            if (is_array($data)) {
                 $class = $this->entityClass;
                 $obj = new $class;
-                foreach ($datas as $field => $value) {
+                foreach ($data as $field => $value) {
 
                     // If the value is a callable we execute it and inject the fixture object and the manager.
                     if ($value instanceof \Closure) {
@@ -181,8 +193,6 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
 
             // If the ID is set, we tell Doctrine to force the insertion of it.
             if ($id) {
-                /** @var ClassMetadata $metadata */
-                $metadata = $this->manager->getClassMetaData(get_class($obj));
                 $metadata->setIdGeneratorType(ClassMetadata::GENERATOR_TYPE_NONE);
             }
 
@@ -203,10 +213,40 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
 
         // If we have to add a reference, we do it
         if ($addRef === true && $obj && $this->referencePrefix) {
-            $this->addReference($this->referencePrefix.($id ?: (string) $obj), $obj);
+            if (1 === count($id)) {
+                // Only reference single identifiers.
+                reset($id);
+                $id = current($id);
+                $this->addReference($this->referencePrefix.($id ?: (string) $obj), $obj);
+            } elseif (count($id) > 1) {
+                throw new \RuntimeException('Cannot add reference for composite identifiers.');
+            }
         }
 
         $obj = null;
+    }
+
+    /**
+     * @param mixed $data
+     * @param string $key
+     *
+     * @return mixed
+     */
+    private function getPropertyFromData($data, $key)
+    {
+        if (is_object($data)) {
+            $method = 'get'.ucfirst($key);
+            if (method_exists($data, $method) && $data->$method()) {
+                return $data->$method;
+            }
+            if ($this->propertyAccessor) {
+                return $this->propertyAccessor->getValue($data, $key);
+            }
+        }
+
+        if (isset($data[$key])) {
+            return $data[$key];
+        }
     }
 
     /**

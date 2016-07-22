@@ -23,7 +23,8 @@
     },
     "suggest": {
         "doctrine/data-fixtures": "To use the nice AbstractFixture class",
-        "doctrine/doctrine-fixtures-bundle": "To use the AbstractFixture class inside a Symfony app"
+        "doctrine/doctrine-fixtures-bundle": "To use the AbstractFixture class inside a Symfony app",
+        "symfony/property-access": "To use property accessor with fixtures"
     },
     "autoload": {
         "psr-4": { "Orbitale\\Component\\DoctrineTools\\" : "" }
