@@ -129,7 +129,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
             || ($this->flushEveryXIterations && $this->numberOfIteratedObjects !== $this->totalNumberOfObjects)
         ) {
             $this->manager->flush();
-            if ($this->clearEntityManagerOnFlush) {
+            if ($this->clearEMOnFlush) {
                 $this->manager->clear();
             }
         }
@@ -215,7 +215,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
                 && $this->numberOfIteratedObjects % $this->flushEveryXIterations === 0
             ) {
                 $this->manager->flush();
-                if ($this->clearEntityManagerOnFlush) {
+                if ($this->clearEMOnFlush) {
                     $this->manager->clear();
                 }
             }
@@ -325,7 +325,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      * @return bool
      */
     protected function clearEntityManagerOnFlush() {
-        return $this->clearEntityManagerOnFlush;
+        return $this->clearEMOnFlush;
     }
 
     /**
