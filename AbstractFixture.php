@@ -83,6 +83,11 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      */
     private $flushEveryXIterations = 0;
 
+    /**
+     * @var bool
+     */
+    private $clearEMOnFlush = true;
+
     public function __construct()
     {
         $this->order                 = $this->getOrder();
@@ -91,6 +96,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
         $this->entityClass           = $this->getEntityClass();
         $this->referencePrefix       = $this->getReferencePrefix();
         $this->propertyAccessor      = class_exists('Symfony\Component\PropertyAccess\PropertyAccess') ? PropertyAccess::createPropertyAccessor() : null;
+        $this->clearEMOnFlush        = $this->clearEntityManagerOnFlush();
     }
 
     /**
@@ -123,7 +129,9 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
             || ($this->flushEveryXIterations && $this->numberOfIteratedObjects !== $this->totalNumberOfObjects)
         ) {
             $this->manager->flush();
-            $this->manager->clear();
+            if ($this->clearEntityManagerOnFlush) {
+                $this->manager->clear();
+            }
         }
     }
 
@@ -207,7 +215,9 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
                 && $this->numberOfIteratedObjects % $this->flushEveryXIterations === 0
             ) {
                 $this->manager->flush();
-                $this->manager->clear();
+                if ($this->clearEntityManagerOnFlush) {
+                    $this->manager->clear();
+                }
             }
             $addRef = true;
         }
@@ -306,6 +316,16 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     protected function searchForMatchingIds()
     {
         return $this->searchForMatchingIds;
+    }
+
+    /**
+     * If true, will run $em->clear() after having run $em->flush().
+     * This allows saving some memory when using huge sets of non-referenced fixtures.
+     *
+     * @return bool
+     */
+    protected function clearEntityManagerOnFlush() {
+        return $this->clearEntityManagerOnFlush;
     }
 
     /**
