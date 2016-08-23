@@ -136,6 +136,24 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     }
 
     /**
+     * This allows you to change your ID generator if you are using IDs in your objects.
+     * On reason to change this would be to use a GeneratorType constant instead of IdGenerator instance.
+     * ID generation can be managed differently depending on your DBMS: sqlite, mysql, postgres, etc.,
+     * all react differently...
+     * 
+     * @param ClassMetadata $metadata
+     * @param null          $id
+     */
+    protected function setGeneratorBasedOnId(ClassMetadata $metadata, $id = null)
+    {
+        if ($id) {
+            $metadata->setIdGenerator(new AssignedGenerator());
+        } else {
+            $metadata->setIdGeneratorType(ClassMetadata::GENERATOR_TYPE_AUTO);
+        }
+    }
+
+    /**
      * Creates the object and persist it in database.
      *
      * @param array|object $data
@@ -200,10 +218,8 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
                 }
             }
 
-            // If the ID is set, we tell Doctrine to force the insertion of it.
-            if ($id) {
-                $metadata->setIdGenerator(new AssignedGenerator());
-            }
+            // Set the id generator in case it is overriden.
+            $this->setGeneratorBasedOnId($metadata, $id);
 
             // And finally we persist the item
             $this->manager->persist($obj);
