@@ -21,6 +21,7 @@ use Doctrine\ORM\Id\AssignedGenerator;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Symfony\Component\PropertyAccess\PropertyAccess;
 use Symfony\Component\PropertyAccess\PropertyAccessor;
+use Symfony\Component\PropertyAccess\Exception\NoSuchIndexException;
 
 /**
  * This class is used mostly for inserting "fixed" data, especially with their primary keys forced on insert.
@@ -140,7 +141,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      * On reason to change this would be to use a GeneratorType constant instead of IdGenerator instance.
      * ID generation can be managed differently depending on your DBMS: sqlite, mysql, postgres, etc.,
      * all react differently...
-     * 
+     *
      * @param ClassMetadata $metadata
      * @param null          $id
      */
@@ -167,7 +168,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
         $identifier = $metadata->getIdentifier();
 
         // The ID is taken in account to force its use in the database.
-        $id = [];
+        $id = array();
         foreach ($identifier as $key) {
             $id[$key] = $this->getPropertyFromData($data, $key);
         }
@@ -197,8 +198,8 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
         }
 
         if ($newObject === true) {
-
             // If the data are in an array, we instanciate a new object.
+            // If it's not, then it's an object, and we consider that it's already populated.
             if (is_array($data)) {
                 $obj = $this->createNewInstance($data);
                 foreach ($data as $field => $value) {
@@ -239,10 +240,25 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
 
         // If we have to add a reference, we do it
         if ($addRef === true && $obj && $this->referencePrefix) {
+            if (!$id || !reset($id)) {
+                // If no id was provided in the object, maybe there was one after data hydration.
+                // Can be done maybe in entity constructor or in a property callback.
+                // So let's try to get it.
+                if ($this->propertyAccessor) {
+                    if ($this->propertyAccessor) {
+                        try {
+                            $id = array('id' => $this->propertyAccessor->getValue($obj, 'id'));
+                        } catch (NoSuchIndexException $e) {
+                            $id = array();
+                        }
+                    }
+                } elseif (method_exists($obj, 'getId')) {
+                    $id = array('id' => $obj->getId());
+                }
+            }
             if (1 === count($id)) {
                 // Only reference single identifiers.
-                reset($id);
-                $id = current($id);
+                $id = reset($id);
                 $this->addReference($this->referencePrefix.($id ?: (string) $obj), $obj);
             } elseif (count($id) > 1) {
                 throw new \RuntimeException('Cannot add reference for composite identifiers.');
