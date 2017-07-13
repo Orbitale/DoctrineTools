@@ -200,8 +200,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
 
             // If the data are in an array, we instanciate a new object.
             if (is_array($data)) {
-                $class = $this->entityClass;
-                $obj = new $class;
+                $obj = $this->createNewInstance();
                 foreach ($data as $field => $value) {
 
                     // If the value is a callable we execute it and inject the fixture object and the manager.
@@ -283,7 +282,8 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      *
      * @return int
      */
-    public function getOrder() {
+    public function getOrder()
+    {
         return $this->order;
     }
 
@@ -307,7 +307,8 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      *
      * @return string|null
      */
-    protected function getReferencePrefix() {
+    protected function getReferencePrefix()
+    {
         return $this->referencePrefix;
     }
 
@@ -340,8 +341,18 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      *
      * @return bool
      */
-    protected function clearEntityManagerOnFlush() {
+    protected function clearEntityManagerOnFlush()
+    {
         return $this->clearEMOnFlush;
+    }
+
+    /**
+     * Creates a new instance of the class associated with the fixture.
+     * Very useful if you have constructor arguments to manage.
+     */
+    protected function createNewInstance()
+    {
+        return new $this->entityClass;
     }
 
     /**
@@ -357,5 +368,4 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      * @return ArrayCollection|object[]
      */
     protected abstract function getObjects();
-
 }
