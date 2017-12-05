@@ -24,7 +24,7 @@ Simply install the library with [Composer](https://getcomposer.org):
 
 ## Entity Repository
 
-There are 3 ways of using `BaseEntityRepository`:
+There are 3 ways of using `EntityRepositoryHelperTrait`:
 
 1. In your own repositories, just extend the Orbitale's one:
 
@@ -33,10 +33,11 @@ There are 3 ways of using `BaseEntityRepository`:
 
 namespace AppBundle\Repository;
 
-use Orbitale\Component\DoctrineTools\BaseEntityRepository;
+use Orbitale\Component\DoctrineTools\EntityRepositoryHelperTrait;
 
-class PostRepository extends BaseEntityRepository
+class PostRepository
 {
+    use EntityRepositoryHelperTrait;
 
     // Your custom logic here ...
 
@@ -50,7 +51,7 @@ class PostRepository extends BaseEntityRepository
 # app/config.yml
 doctrine:
     orm:
-        default_repository_class: Orbitale\Component\DoctrineTools\BaseEntityRepository
+        default_repository_class: Orbitale\Component\DoctrineTools\EntityRepositoryHelperTrait
 
 ```
 
@@ -59,7 +60,7 @@ doctrine:
 ```php
 
 $configuration = new Doctrine\ORM\Configuration();
-$configuration->setDefaultRepositoryClassName('Orbitale\Component\DoctrineTools\BaseEntityRepository');
+$configuration->setDefaultRepositoryClassName('Orbitale\Component\DoctrineTools\EntityRepositoryHelperTrait');
 
 // Build the EntityManager with its configuration...
 
@@ -67,7 +68,7 @@ $configuration->setDefaultRepositoryClassName('Orbitale\Component\DoctrineTools\
 
 This way, you can use your EntityRepository exactly like before, it just adds new cool methods!
 
-Just take a look at the [BaseEntityRepository](BaseEntityRepository.php) class to see what nice features it adds!
+Just take a look at the [EntityRepositoryHelperTrait](EntityRepositoryHelperTrait.php) class to see what nice features it adds!
 
 ## Doctrine Fixtures
 

@@ -16,53 +16,39 @@ use Doctrine\ORM\Query;
 use Symfony\Component\PropertyAccess\PropertyAccess;
 
 /**
- * This class is a tool to be used with the Doctrine ORM.
+ * This trait is a tool to be used with the Doctrine ORM.
  * It adds many useful methods to the default EntityRepository, and can be used in any ORM environment.
- * For Symfony, if you want to change the default EntityRepository to this one, just change the configuration,
- * in app/config.yml
- * doctrine:
- *     orm:
- *         default_repository_class: Orbitale\Component\DoctrineTools\BaseEntityRepository
  *
  * Many methods accept a "$indexBy" parameter. This parameter is used to modify the returned collection index.
  * If you specify the $indexBy parameter, the returned array will be indexed by the specified field.
  * For instance, if you want to index by "id", you can have something similar to this:
  * [ '1' => ['id': 1, 'slug': 'object'] , '12' => ['id': '12', 'slug' => 'another-object'] ]
  * This is great to be sure that primary/unique indexes garantee unique objects in the returned array.
- *
- * @package Orbitale\Component\DoctrineTools
  */
-class BaseEntityRepository extends EntityRepository
+trait EntityRepositoryHelperTrait
 {
-
     /**
      * Finds all objects and retrieve only "root" objects, without their associated relatives.
      * This prevends potential "fetch=EAGER" to be thrown.
-     *
-     * @param string $indexBy The field to use as array key index.
-     *
-     * @return object[]
      */
-    public function findAllRoot($indexBy = null)
+    public function findAllRoot(string $indexBy = null): iterable
     {
-        $datas = $this->createQueryBuilder('object')->getQuery()->getResult();
+        $this->checkRepository();
 
-        if ($datas && $indexBy) {
-            $datas = $this->sortCollection($datas, $indexBy);
-        }
-
-        return $datas;
+        return $this->createQueryBuilder('object')
+            ->indexBy($indexBy)
+            ->getQuery()
+            ->getResult()
+        ;
     }
 
     /**
      * Finds all objects and fetches them as array.
-     *
-     * @param string $indexBy The field to use as array key index.
-     *
-     * @return array[]
      */
-    public function findAllArray($indexBy = null)
+    public function findAllArray(string $indexBy = null): array
     {
+        $this->checkRepository();
+
         $datas = $this->createQueryBuilder('object', $indexBy)->getQuery()->getArrayResult();
 
         if ($datas && $indexBy) {
@@ -76,29 +62,30 @@ class BaseEntityRepository extends EntityRepository
      * Alias for findBy, but adding the $indexBy argument.
      *
      * {@inheritdoc}
-     *
-     * @param string $indexBy The field to use as array key index.
      */
-    public function findBy(array $criteria, array $orderBy = null, $limit = null, $offset = null, $indexBy = null)
+    public function findBy(array $criteria, array $orderBy = null, $limit = null, $offset = null, string $indexBy = null)
     {
-        $datas = parent::findBy($criteria, $orderBy, $limit, $offset);
-        if ($datas && $indexBy) {
-            $datas = $this->sortCollection($datas, $indexBy);
+        $this->checkRepository();
+
+        $data = parent::findBy($criteria, $orderBy, $limit, $offset);
+
+        if ($data && $indexBy) {
+            $data = $this->sortCollection($data, $indexBy);
         }
 
-        return $datas;
+        return $data;
     }
 
     /**
      * Alias for findAll, but adding the $indexBy argument.
-     * If you do not want the associated elements, please {@see BaseEntityRepository::findAllRoot}
+     * If you do not want the associated elements to be fetched at the same time, please {@see EntityRepositoryHelperTrait::findAllRoot}
      *
      * {@inheritdoc}
-     *
-     * @param string $indexBy The field to use as array key index.
      */
-    public function findAll($indexBy = null)
+    public function findAll(string $indexBy = null)
     {
+        $this->checkRepository();
+
         $datas = $this->findBy(array());
 
         if ($datas && $indexBy) {
@@ -112,36 +99,33 @@ class BaseEntityRepository extends EntityRepository
      * Gets current AUTO_INCREMENT value from table.
      * Useful to see get the maximum ID of the table.
      * NOTE: Not compatible with every platform.
-     *
-     * @internal
-     * @return integer
      */
-    public function getAutoIncrement()
+    public function getAutoIncrement(): int
     {
+        $this->checkRepository();
+
         $table = $this->getClassMetadata()->getTableName();
 
         $connection = $this->getEntityManager()->getConnection();
         $statement  = $connection->prepare('SHOW TABLE STATUS LIKE "'.$table.'" ');
         $statement->execute();
-        $datas = $statement->fetch();
+        $data = $statement->fetch();
 
-        $max = (int) $datas['Auto_increment'];
-
-        return $max;
+        return (int) $data['Auto_increment'];
     }
 
     /**
      * Gets total number of elements in the table.
-     *
-     * @return integer
      */
-    public function getNumberOfElements()
+    public function getNumberOfElements(): ?int
     {
+        $this->checkRepository();
+
         return $this->_em->createQueryBuilder()
             ->select('count(a)')
             ->from($this->getEntityName(), 'a')
             ->getQuery()
-            ->getSingleScalarResult();
+            ->getSingleScalarResult()
         ;
     }
 
@@ -149,14 +133,11 @@ class BaseEntityRepository extends EntityRepository
      * Sorts a collection by a specific key, usually the primary key one,
      *  but you can specify any key.
      * For "cleanest" uses, you'd better use a primary or unique key.
-     *
-     * @param object[] $collection  The collection to sort by index
-     * @param string   $indexBy     The field to use as array key index. The special "true" or "_primary" values will use the single identifier field name from the metadatas.
-     * @throws MappingException
-     * @return array[]|object[]
      */
-    public function sortCollection($collection, $indexBy = null)
+    public function sortCollection(iterable $collection, string $indexBy = null): iterable
     {
+        $this->checkRepository();
+
         $finalCollection = array();
         $currentObject   = current($collection);
         $accessor        = class_exists('Symfony\Component\PropertyAccess\PropertyAccess') ? PropertyAccess::createPropertyAccessor() : null;
@@ -192,14 +173,13 @@ class BaseEntityRepository extends EntityRepository
 
     /**
      * Gets the list of all single identifiers (id) from table
-     *
-     * @return array
-     *
-     * @throws MappingException
      */
-    public function getIds()
+    public function getIds(): iterable
     {
+        $this->checkRepository();
+
         $primaryKey  = $this->getClassMetadata()->getSingleIdentifierFieldName();
+
         $result = $this->_em
             ->createQueryBuilder()
             ->select('entity.'.$primaryKey)
@@ -215,5 +195,12 @@ class BaseEntityRepository extends EntityRepository
         }
 
         return $array;
+    }
+
+    private function checkRepository(): void
+    {
+        if (!$this instanceof EntityRepository) {
+            throw new \RuntimeException(sprintf('This trait can only be used by %s classes.', EntityRepository::class));
+        }
     }
 }
