@@ -1,6 +1,6 @@
 <?php
 
-/*
+/**
  * This file is part of the Orbitale DoctrineTools package.
  *
  * (c) Alexandre Rock Ancelet <alex@orbitale.io>
@@ -34,71 +34,45 @@ use Symfony\Component\PropertyAccess\Exception\NoSuchIndexException;
  */
 abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFixtureInterface
 {
-    /**
-     * @var EntityManager
-     */
+    /** @var ObjectManager */
     private $manager;
 
-    /**
-     * @var EntityRepository
-     */
+    /** @var EntityRepository */
     private $repo;
 
-    /**
-     * @var int
-     */
-    private $order;
-
-    /**
-     * @var string
-     */
-    private $entityClass;
-
-    /**
-     * @var PropertyAccessor
-     */
+    /** @var PropertyAccessor */
     private $propertyAccessor;
 
-    /**
-     * @var null|string
-     */
-    private $referencePrefix;
-
-    /**
-     * @var bool
-     */
-    private $searchForMatchingIds = true;
-
-    /**
-     * @var int
-     */
+    /** @var int */
     private $totalNumberOfObjects = 0;
 
-    /**
-     * @var int
-     */
+    /** @var int */
     private $numberOfIteratedObjects = 0;
 
-    /**
-     * @var int
-     */
-    private $flushEveryXIterations = 0;
-
-    /**
-     * @var bool
-     */
+    /** @var bool */
     private $clearEMOnFlush = true;
 
     public function __construct()
     {
-        $this->order                 = $this->getOrder();
-        $this->flushEveryXIterations = $this->flushEveryXIterations();
-        $this->searchForMatchingIds  = $this->searchForMatchingIds();
-        $this->entityClass           = $this->getEntityClass();
-        $this->referencePrefix       = $this->getReferencePrefix();
-        $this->propertyAccessor      = class_exists('Symfony\Component\PropertyAccess\PropertyAccess') ? PropertyAccess::createPropertyAccessor() : null;
-        $this->clearEMOnFlush        = $this->clearEntityManagerOnFlush();
+        $this->clearEMOnFlush = $this->clearEntityManagerOnFlush();
+        if (class_exists('Symfony\Component\PropertyAccess\PropertyAccess')) {
+            $this->propertyAccessor = PropertyAccess::createPropertyAccessor();
+        }
     }
+
+    /**
+     * Returns the class of the entity you're managing.
+     *
+     * @return string
+     */
+    abstract protected function getEntityClass(): string;
+
+    /**
+     * Returns a list of objects to insert in the database.
+     *
+     * @return ArrayCollection|object[]
+     */
+    abstract protected function getObjects();
 
     /**
      * {@inheritdoc}
@@ -107,7 +81,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     {
         $this->manager = $manager;
 
-        if ($this->disableLogger()) {
+        if ($this->disableLogger() && $this->manager instanceof EntityManager) {
             $this->manager->getConnection()->getConfiguration()->setSQLLogger(null);
         }
 
@@ -126,8 +100,8 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
         // Flush if we performed a "whole" fixture load,
         //  or if we flushed with batches but have not flushed all items.
         if (
-            !$this->flushEveryXIterations
-            || ($this->flushEveryXIterations && $this->numberOfIteratedObjects !== $this->totalNumberOfObjects)
+            !$this->flushEveryXIterations()
+            || ($this->flushEveryXIterations() && $this->numberOfIteratedObjects !== $this->totalNumberOfObjects)
         ) {
             $this->manager->flush();
             if ($this->clearEMOnFlush) {
@@ -145,7 +119,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      * @param ClassMetadata $metadata
      * @param null          $id
      */
-    protected function setGeneratorBasedOnId(ClassMetadata $metadata, $id = null)
+    protected function setGeneratorBasedOnId(ClassMetadata $metadata, $id = null): void
     {
         if ($id) {
             $metadata->setIdGenerator(new AssignedGenerator());
@@ -157,7 +131,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     /**
      * Creates the object and persist it in database.
      *
-     * @param array|object $data
+     * @param object $data
      */
     private function fixtureObject($data)
     {
@@ -168,7 +142,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
         $identifier = $metadata->getIdentifier();
 
         // The ID is taken in account to force its use in the database.
-        $id = array();
+        $id = [];
         foreach ($identifier as $key) {
             $id[$key] = $this->getPropertyFromData($data, $key);
         }
@@ -183,7 +157,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
         $addRef = false;
 
         // If the user specifies an ID and the fixture class wants it to be merged, we search for an object.
-        if ($id && $this->searchForMatchingIds) {
+        if ($id && $this->searchForMatchingIds()) {
             // Checks that the object ID exists in database.
             $obj = $this->repo->findOneBy($id);
             if ($obj) {
@@ -203,7 +177,6 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
             if (is_array($data)) {
                 $obj = $this->createNewInstance($data);
                 foreach ($data as $field => $value) {
-
                     // If the value is a callable we execute it and inject the fixture object and the manager.
                     if ($value instanceof \Closure) {
                         $value = $value($obj, $this, $this->manager);
@@ -226,9 +199,9 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
 
             // If we need to flush it, then we do it too.
             if (
-                $this->flushEveryXIterations
-                && $this->numberOfIteratedObjects
-                && $this->numberOfIteratedObjects % $this->flushEveryXIterations === 0
+                $this->numberOfIteratedObjects > 0
+                && $this->flushEveryXIterations() > 0
+                && $this->numberOfIteratedObjects % $this->flushEveryXIterations() === 0
             ) {
                 $this->manager->flush();
                 if ($this->clearEMOnFlush) {
@@ -239,7 +212,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
         }
 
         // If we have to add a reference, we do it
-        if ($addRef === true && $obj && $this->referencePrefix) {
+        if ($addRef === true && $obj && $this->getReferencePrefix()) {
             if (!$id || !reset($id)) {
                 // If no id was provided in the object, maybe there was one after data hydration.
                 // Can be done maybe in entity constructor or in a property callback.
@@ -247,19 +220,19 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
                 if ($this->propertyAccessor) {
                     if ($this->propertyAccessor) {
                         try {
-                            $id = array('id' => $this->propertyAccessor->getValue($obj, 'id'));
+                            $id = ['id' => $this->propertyAccessor->getValue($obj, 'id')];
                         } catch (NoSuchIndexException $e) {
-                            $id = array();
+                            $id = [];
                         }
                     }
                 } elseif (method_exists($obj, 'getId')) {
-                    $id = array('id' => $obj->getId());
+                    $id = ['id' => $obj->getId()];
                 }
             }
             if (1 === count($id)) {
                 // Only reference single identifiers.
                 $id = reset($id);
-                $this->addReference($this->referencePrefix.($id ?: (string) $obj), $obj);
+                $this->addReference($this->getReferencePrefix().($id ?: (string) $obj), $obj);
             } elseif (count($id) > 1) {
                 throw new \RuntimeException('Cannot add reference for composite identifiers.');
             }
@@ -274,7 +247,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      *
      * @return mixed
      */
-    private function getPropertyFromData($data, $key)
+    private function getPropertyFromData($data, string $key)
     {
         if (is_object($data)) {
             $method = 'get'.ucfirst($key);
@@ -286,9 +259,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
             }
         }
 
-        if (isset($data[$key])) {
-            return $data[$key];
-        }
+        return $data[$key] ?? null;
     }
 
     /**
@@ -298,9 +269,9 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      *
      * @return int
      */
-    public function getOrder()
+    public function getOrder(): int
     {
-        return $this->order;
+        return 0;
     }
 
     /**
@@ -309,7 +280,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      *
      * @return bool
      */
-    protected function disableLogger()
+    protected function disableLogger(): bool
     {
         return false;
     }
@@ -320,35 +291,30 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      * NOTE: To create references of an object, it must have an ID, and if not, implement __toString(), because
      *   each object is referenced BEFORE flushing the database.
      * NOTE2: If you specified a "flushEveryXIterations" value, then the object will be provided with an ID every time.
-     *
-     * @return string|null
      */
-    protected function getReferencePrefix()
+    protected function getReferencePrefix(): ?string
     {
-        return $this->referencePrefix;
+        return null;
     }
 
     /**
      * If specified, the entity manager will be flushed every X times, depending on your specified values.
      * Default is null, so the database is flushed only at the end of all persists.
-     *
-     * @return bool
      */
-    protected function flushEveryXIterations()
+    protected function flushEveryXIterations(): int
     {
-        return $this->flushEveryXIterations;
+        return 0;
     }
 
     /**
-     * If true and an ID is specified, will execute a $manager->find($id) in the database.
-     * By default this var is true.
+     * If true and an ID is specified in fixture's $data, will execute a $manager->find($id) in the database.
      * Be careful, if you set it to false you may have "duplicate entry" errors if your database is already populated.
      *
      * @return bool
      */
-    protected function searchForMatchingIds()
+    protected function searchForMatchingIds(): bool
     {
-        return $this->searchForMatchingIds;
+        return true;
     }
 
     /**
@@ -357,35 +323,23 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      *
      * @return bool
      */
-    protected function clearEntityManagerOnFlush()
+    protected function clearEntityManagerOnFlush(): bool
     {
-        return $this->clearEMOnFlush;
+        return true;
     }
 
     /**
      * Creates a new instance of the class associated with the fixture.
-     * Very useful if you have constructor arguments to manage.
+     * Override this method if you have constructor arguments to manage yourself depending on input data.
      *
      * @param array $data
      *
      * @return object
      */
-    protected function createNewInstance($data)
+    protected function createNewInstance(array $data)
     {
-        return new $this->entityClass;
+        $class = $this->getEntityClass();
+
+        return new $class;
     }
-
-    /**
-     * Returns the class of the entity you're managing.
-     *
-     * @return string
-     */
-    protected abstract function getEntityClass();
-
-    /**
-     * Returns a list of objects to insert in the database.
-     *
-     * @return ArrayCollection|object[]
-     */
-    protected abstract function getObjects();
 }

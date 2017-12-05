@@ -1,5 +1,6 @@
 <?php
-/*
+
+/**
  * This file is part of the Orbitale DoctrineTools package.
  *
  * (c) Alexandre Rock Ancelet <alex@orbitale.io>
@@ -11,7 +12,6 @@
 namespace Orbitale\Component\DoctrineTools;
 
 use Doctrine\ORM\EntityRepository;
-use Doctrine\ORM\Mapping\MappingException;
 use Doctrine\ORM\Query;
 use Symfony\Component\PropertyAccess\PropertyAccess;
 
@@ -31,12 +31,12 @@ trait EntityRepositoryHelperTrait
      * Finds all objects and retrieve only "root" objects, without their associated relatives.
      * This prevends potential "fetch=EAGER" to be thrown.
      */
-    public function findAllRoot(string $indexBy = null): iterable
+    public function findAllRoot($indexBy = null): iterable
     {
         $this->checkRepository();
 
         return $this->createQueryBuilder('object')
-            ->indexBy($indexBy)
+            ->indexBy('object', $indexBy)
             ->getQuery()
             ->getResult()
         ;
@@ -45,7 +45,7 @@ trait EntityRepositoryHelperTrait
     /**
      * Finds all objects and fetches them as array.
      */
-    public function findAllArray(string $indexBy = null): array
+    public function findAllArray($indexBy = null): array
     {
         $this->checkRepository();
 
@@ -63,7 +63,7 @@ trait EntityRepositoryHelperTrait
      *
      * {@inheritdoc}
      */
-    public function findBy(array $criteria, array $orderBy = null, $limit = null, $offset = null, string $indexBy = null)
+    public function findBy(array $criteria, array $orderBy = null, $limit = null, $offset = null, $indexBy = null)
     {
         $this->checkRepository();
 
@@ -82,11 +82,11 @@ trait EntityRepositoryHelperTrait
      *
      * {@inheritdoc}
      */
-    public function findAll(string $indexBy = null)
+    public function findAll($indexBy = null)
     {
         $this->checkRepository();
 
-        $datas = $this->findBy(array());
+        $datas = $this->findBy([]);
 
         if ($datas && $indexBy) {
             $datas = $this->sortCollection($datas, $indexBy);
@@ -134,11 +134,11 @@ trait EntityRepositoryHelperTrait
      *  but you can specify any key.
      * For "cleanest" uses, you'd better use a primary or unique key.
      */
-    public function sortCollection(iterable $collection, string $indexBy = null): iterable
+    public function sortCollection(iterable $collection, $indexBy = null): iterable
     {
         $this->checkRepository();
 
-        $finalCollection = array();
+        $finalCollection = [];
         $currentObject   = current($collection);
         $accessor        = class_exists('Symfony\Component\PropertyAccess\PropertyAccess') ? PropertyAccess::createPropertyAccessor() : null;
 
@@ -188,7 +188,7 @@ trait EntityRepositoryHelperTrait
             ->getResult(Query::HYDRATE_ARRAY)
         ;
 
-        $array = array();
+        $array = [];
 
         foreach ($result as $id) {
             $array[] = $id[$primaryKey];
