@@ -35,11 +35,16 @@ trait EntityRepositoryHelperTrait
     {
         $this->checkRepository();
 
-        return $this->createQueryBuilder('object')
-            ->indexBy('object', $indexBy)
+        $data = $this->createQueryBuilder('object')
             ->getQuery()
             ->getResult()
         ;
+
+        if ($data && $indexBy) {
+            $data = $this->sortCollection($data, $indexBy);
+        }
+
+        return $data;
     }
 
     /**
@@ -49,13 +54,13 @@ trait EntityRepositoryHelperTrait
     {
         $this->checkRepository();
 
-        $datas = $this->createQueryBuilder('object', $indexBy)->getQuery()->getArrayResult();
+        $data = $this->createQueryBuilder('object', $indexBy)->getQuery()->getArrayResult();
 
-        if ($datas && $indexBy) {
-            $datas = $this->sortCollection($datas, $indexBy);
+        if ($data && $indexBy) {
+            $data = $this->sortCollection($data, $indexBy);
         }
 
-        return $datas;
+        return $data;
     }
 
     /**
@@ -86,13 +91,13 @@ trait EntityRepositoryHelperTrait
     {
         $this->checkRepository();
 
-        $datas = $this->findBy([]);
+        $data = $this->findBy([]);
 
-        if ($datas && $indexBy) {
-            $datas = $this->sortCollection($datas, $indexBy);
+        if ($data && $indexBy) {
+            $data = $this->sortCollection($data, $indexBy);
         }
 
-        return $datas;
+        return $data;
     }
 
     /**
