@@ -89,7 +89,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
 
         $objects = $this->getObjects();
 
-        $this->totalNumberOfObjects = count($objects);
+        $this->totalNumberOfObjects = \count($objects);
 
         $this->numberOfIteratedObjects = 0;
         foreach ($objects as $data) {
@@ -152,7 +152,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
         }
 
         // Make sure id is correctly ready for $repo->find($id).
-        if (0 === count($id)) {
+        if (0 === \count($id)) {
             $id = null;
         }
 
@@ -178,7 +178,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
         if ($newObject === true) {
             // If the data are in an array, we instanciate a new object.
             // If it's not, then it's an object, and we consider that it's already populated.
-            if (is_array($data)) {
+            if (\is_array($data)) {
                 $obj = $this->createNewInstance($data);
                 foreach ($data as $field => $value) {
                     // If the value is a callable we execute it and inject the fixture object and the manager.
@@ -190,7 +190,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
                         $this->propertyAccessor->setValue($obj, $field, $value);
                     } else {
                         // Force the use of a setter if accessor is not available.
-                        $obj->{'set'.ucfirst($field)}($value);
+                        $obj->{'set'.\ucfirst($field)}($value);
                     }
                 }
             }
@@ -217,7 +217,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
 
         // If we have to add a reference, we do it
         if ($addRef === true && $obj && $this->getReferencePrefix()) {
-            if (!$id || !reset($id)) {
+            if (!$id || !\reset($id)) {
                 // If no id was provided in the object, maybe there was one after data hydration.
                 // Can be done maybe in entity constructor or in a property callback.
                 // So let's try to get it.
@@ -229,15 +229,15 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
                             $id = [];
                         }
                     }
-                } elseif (method_exists($obj, 'getId')) {
+                } elseif (\method_exists($obj, 'getId')) {
                     $id = ['id' => $obj->getId()];
                 }
             }
-            if (1 === count($id)) {
+            if (1 === \count($id)) {
                 // Only reference single identifiers.
-                $id = reset($id);
+                $id = \reset($id);
                 $this->addReference($this->getReferencePrefix().($id ?: (string) $obj), $obj);
-            } elseif (count($id) > 1) {
+            } elseif (\count($id) > 1) {
                 throw new \RuntimeException('Cannot add reference for composite identifiers.');
             }
         }
@@ -253,9 +253,9 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      */
     private function getPropertyFromData($data, string $key)
     {
-        if (is_object($data)) {
-            $method = 'get'.ucfirst($key);
-            if (method_exists($data, $method) && $data->$method()) {
+        if (\is_object($data)) {
+            $method = 'get'.\ucfirst($key);
+            if (\method_exists($data, $method) && $data->$method()) {
                 return $data->$method;
             }
             if ($this->propertyAccessor) {
