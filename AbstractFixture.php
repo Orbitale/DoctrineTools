@@ -144,7 +144,11 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
         // The ID is taken in account to force its use in the database.
         $id = [];
         foreach ($identifier as $key) {
-            $id[$key] = $this->getPropertyFromData($data, $key);
+            $info = $this->getPropertyFromData($data, $key);
+            if (!$info) {
+                continue;
+            }
+            $id[$key] = $info;
         }
 
         // Make sure id is correctly ready for $repo->find($id).
