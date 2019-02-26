@@ -49,11 +49,11 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     /** @var bool */
     private $clearEMOnFlush;
 
+    /** @var ReflectionClass|null */
+    private $reflection;
+
     /** @var Instantiator|null */
     private static $instantiator;
-
-    /** @var ReflectionClass|null */
-    private static $reflection;
 
     public function __construct()
     {
@@ -257,11 +257,11 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
 
     private function getReflection(): ReflectionClass
     {
-        if (!self::$reflection) {
-            return self::$reflection = new ReflectionClass($this->getEntityClass());
+        if (!$this->reflection) {
+            return $this->reflection = new ReflectionClass($this->getEntityClass());
         }
 
-        return self::$reflection;
+        return $this->reflection;
     }
 
     private static function getInstantiator(): Instantiator
