@@ -158,11 +158,11 @@ class PostFixtures extends AbstractFixture implements ORMFixtureInterface
     public function getObjects(): array
     {
         return [
-            ['id' => 1, 'title' => 'First post', 'parent' => null],
+            ['id' => 'c5022243-343b-40c3-8c88-09c1a76faf78', 'title' => 'First post', 'parent' => null],
             [
                 'title' => 'Second post',
                 'parent' => function(Post $object, AbstractFixture $fixture, EntityManagerInterface $manager) {
-                    return $fixture->getReference('posts-1');
+                    return $fixture->getReference('posts-c5022243-343b-40c3-8c88-09c1a76faf78');
                 },
             ],
         ];
