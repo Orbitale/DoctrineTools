@@ -11,17 +11,17 @@
 
 namespace Orbitale\Component\DoctrineTools;
 
-use Doctrine\Common\Collections\ArrayCollection;
+use Closure;
 use Doctrine\Common\DataFixtures\AbstractFixture as BaseAbstractFixture;
 use Doctrine\Common\DataFixtures\OrderedFixtureInterface;
 use Doctrine\Common\Persistence\ObjectManager;
-use Doctrine\ORM\EntityManager;
+use Doctrine\Instantiator\Instantiator;
+use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\EntityRepository;
-use Doctrine\ORM\Id\AssignedGenerator;
-use Doctrine\ORM\Mapping\ClassMetadata;
-use Symfony\Component\PropertyAccess\PropertyAccess;
-use Symfony\Component\PropertyAccess\PropertyAccessor;
-use Symfony\Component\PropertyAccess\Exception\NoSuchIndexException;
+use ReflectionClass;
+use function method_exists;
+use RuntimeException;
+use function sprintf;
 
 /**
  * This class is used mostly for inserting "fixed" data, especially with their primary keys forced on insert.
@@ -34,14 +34,11 @@ use Symfony\Component\PropertyAccess\Exception\NoSuchIndexException;
  */
 abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFixtureInterface
 {
-    /** @var ObjectManager */
+    /** @var EntityManagerInterface */
     private $manager;
 
     /** @var EntityRepository */
     private $repo;
-
-    /** @var PropertyAccessor */
-    private $propertyAccessor;
 
     /** @var int */
     private $totalNumberOfObjects = 0;
@@ -50,14 +47,17 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     private $numberOfIteratedObjects = 0;
 
     /** @var bool */
-    private $clearEMOnFlush = true;
+    private $clearEMOnFlush;
+
+    /** @var Instantiator|null */
+    private static $instantiator;
+
+    /** @var ReflectionClass|null */
+    private static $reflection;
 
     public function __construct()
     {
         $this->clearEMOnFlush = $this->clearEntityManagerOnFlush();
-        if (class_exists('Symfony\Component\PropertyAccess\PropertyAccess')) {
-            $this->propertyAccessor = PropertyAccess::createPropertyAccessor();
-        }
     }
 
     /**
@@ -68,11 +68,11 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     abstract protected function getEntityClass(): string;
 
     /**
-     * Returns a list of objects to insert in the database.
+     * Returns a nested array containing the list of objects that should be persisted.
      *
-     * @return ArrayCollection|object[]
+     * @return array[]
      */
-    abstract protected function getObjects();
+    abstract protected function getObjects(): array;
 
     /**
      * {@inheritdoc}
@@ -81,7 +81,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     {
         $this->manager = $manager;
 
-        if ($this->disableLogger() && $this->manager instanceof EntityManager) {
+        if ($this->manager instanceof EntityManagerInterface && $this->disableLogger()) {
             $this->manager->getConnection()->getConfiguration()->setSQLLogger(null);
         }
 
@@ -111,159 +111,49 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     }
 
     /**
-     * This allows you to change your ID generator if you are using IDs in your objects.
-     * On reason to change this would be to use a GeneratorType constant instead of IdGenerator instance.
-     * ID generation can be managed differently depending on your DBMS: sqlite, mysql, postgres, etc.,
-     * all react differently...
-     *
-     * @param ClassMetadata $metadata
-     * @param null          $id
-     */
-    protected function setGeneratorBasedOnId(ClassMetadata $metadata, $id = null): void
-    {
-        if ($id) {
-            $metadata->setIdGenerator(new AssignedGenerator());
-        } else {
-            $metadata->setIdGeneratorType(ClassMetadata::GENERATOR_TYPE_AUTO);
-        }
-    }
-
-    /**
      * Creates the object and persist it in database.
      *
      * @param object $data
      */
-    private function fixtureObject($data)
+    private function fixtureObject(array $data): void
     {
-        /** @var ClassMetadata $metadata */
-        $metadata = $this->manager->getClassMetadata($this->getEntityClass());
+        $obj = $this->createNewInstance($data);
 
-        // Can be either one or multiple identifiers.
-        $identifier = $metadata->getIdentifier();
+        // And finally we persist the item
+        $this->manager->persist($obj);
 
-        // The ID is taken in account to force its use in the database.
-        $id = [];
-        foreach ($identifier as $key) {
-            $info = $this->getPropertyFromData($data, $key);
-            if (!$info) {
-                continue;
+        // If we need to flush it, then we do it too.
+        if (
+            $this->numberOfIteratedObjects > 0
+            && $this->flushEveryXIterations() > 0
+            && $this->numberOfIteratedObjects % $this->flushEveryXIterations() === 0
+        ) {
+            $this->manager->flush();
+            if ($this->clearEMOnFlush) {
+                $this->manager->clear();
             }
-            $id[$key] = $info;
-        }
-
-        // Make sure id is correctly ready for $repo->find($id).
-        if (0 === \count($id)) {
-            $id = null;
-        }
-
-        $obj = null;
-        $newObject = false;
-        $addRef = false;
-
-        // If the user specifies an ID and the fixture class wants it to be merged, we search for an object.
-        if ($id && $this->searchForMatchingIds()) {
-            // Checks that the object ID exists in database.
-            $obj = $this->repo->findOneBy($id);
-            if ($obj) {
-                // If so, the object is not overwritten.
-                $addRef = true;
-            } else {
-                // Else, we create a new object.
-                $newObject = true;
-            }
-        } else {
-            $newObject = true;
-        }
-
-        if ($newObject === true) {
-            // If the data are in an array, we instanciate a new object.
-            // If it's not, then it's an object, and we consider that it's already populated.
-            if (\is_array($data)) {
-                $obj = $this->createNewInstance($data);
-                foreach ($data as $field => $value) {
-                    // If the value is a callable we execute it and inject the fixture object and the manager.
-                    if ($value instanceof \Closure) {
-                        $value = $value($obj, $this, $this->manager);
-                    }
-
-                    if ($this->propertyAccessor) {
-                        $this->propertyAccessor->setValue($obj, $field, $value);
-                    } else {
-                        // Force the use of a setter if accessor is not available.
-                        $obj->{'set'.\ucfirst($field)}($value);
-                    }
-                }
-            }
-
-            // Set the id generator in case it is overriden.
-            $this->setGeneratorBasedOnId($metadata, $id);
-
-            // And finally we persist the item
-            $this->manager->persist($obj);
-
-            // If we need to flush it, then we do it too.
-            if (
-                $this->numberOfIteratedObjects > 0
-                && $this->flushEveryXIterations() > 0
-                && $this->numberOfIteratedObjects % $this->flushEveryXIterations() === 0
-            ) {
-                $this->manager->flush();
-                if ($this->clearEMOnFlush) {
-                    $this->manager->clear();
-                }
-            }
-            $addRef = true;
         }
 
         // If we have to add a reference, we do it
-        if ($addRef === true && $obj && $this->getReferencePrefix()) {
-            if (!$id || !\reset($id)) {
-                // If no id was provided in the object, maybe there was one after data hydration.
-                // Can be done maybe in entity constructor or in a property callback.
-                // So let's try to get it.
-                if ($this->propertyAccessor) {
-                    if ($this->propertyAccessor) {
-                        try {
-                            $id = ['id' => $this->propertyAccessor->getValue($obj, 'id')];
-                        } catch (NoSuchIndexException $e) {
-                            $id = [];
-                        }
-                    }
-                } elseif (\method_exists($obj, 'getId')) {
-                    $id = ['id' => $obj->getId()];
-                }
+        if ($prefix = $this->getReferencePrefix()) {
+            $methodName = $this->getMethodNameForReference();
+
+            $reference = null;
+
+            if (method_exists($obj, $methodName)) {
+                $reference = $obj->{$methodName}();
+            } elseif (method_exists($obj, '__toString')) {
+                $reference = (string) $obj;
             }
-            if (1 === \count($id)) {
-                // Only reference single identifiers.
-                $id = \reset($id);
-                $this->addReference($this->getReferencePrefix().($id ?: (string) $obj), $obj);
-            } elseif (\count($id) > 1) {
-                throw new \RuntimeException('Cannot add reference for composite identifiers.');
+
+            if (!$reference) {
+                throw new RuntimeException(sprintf(
+                    'If you want to specify a reference with prefix "%s", method "%s" or "%s" must exist in the class, or you can override the "%s" method and add your own.',
+                    $prefix, $methodName, '__toString()', 'getMethodNameForReference'
+                ));
             }
+            $this->addReference($prefix.$reference, $obj);
         }
-
-        $obj = null;
-    }
-
-    /**
-     * @param mixed $data
-     * @param string $key
-     *
-     * @return mixed
-     */
-    private function getPropertyFromData($data, string $key)
-    {
-        if (\is_object($data)) {
-            $method = 'get'.\ucfirst($key);
-            if (\method_exists($data, $method) && $data->$method()) {
-                return $data->$method;
-            }
-            if ($this->propertyAccessor) {
-                return $this->propertyAccessor->getValue($data, $key);
-            }
-        }
-
-        return $data[$key] ?? null;
     }
 
     /**
@@ -286,7 +176,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      */
     protected function disableLogger(): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -302,23 +192,28 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     }
 
     /**
+     * When set, you can customize the method that will be used
+     * to determine the second part of the reference prefix.
+     * For example, if reference prefix is "my-entity-" and the
+     * method is "getIdentifier()", the reference will be:
+     * "$reference = 'my-entity-'.$obj->getIdentifier()".
+     *
+     * Only used when getReferencePrefix() returns non-empty value.
+     *
+     * Always tries to fall back to "__toString()".
+     */
+    protected function getMethodNameForReference(): string
+    {
+        return 'getId';
+    }
+
+    /**
      * If specified, the entity manager will be flushed every X times, depending on your specified values.
      * Default is null, so the database is flushed only at the end of all persists.
      */
     protected function flushEveryXIterations(): int
     {
         return 0;
-    }
-
-    /**
-     * If true and an ID is specified in fixture's $data, will execute a $manager->find($id) in the database.
-     * Be careful, if you set it to false you may have "duplicate entry" errors if your database is already populated.
-     *
-     * @return bool
-     */
-    protected function searchForMatchingIds(): bool
-    {
-        return true;
     }
 
     /**
@@ -340,10 +235,41 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
      *
      * @return object
      */
-    protected function createNewInstance(array $data)
+    protected function createNewInstance(array $data): object
     {
-        $class = $this->getEntityClass();
+        $instance = self::getInstantiator()->instantiate($this->getEntityClass());
 
-        return new $class;
+        $refl = $this->getReflection();
+
+        foreach ($data as $key => $value) {
+            $prop = $refl->getProperty($key);
+            $prop->setAccessible(true);
+
+            if ($value instanceof Closure) {
+                $value = $value($instance, $this, $this->manager);
+            }
+
+            $prop->setValue($instance, $value);
+        }
+
+        return $instance;
+    }
+
+    private function getReflection(): ReflectionClass
+    {
+        if (!self::$reflection) {
+            return self::$reflection = new ReflectionClass($this->getEntityClass());
+        }
+
+        return self::$reflection;
+    }
+
+    private static function getInstantiator(): Instantiator
+    {
+        if (!self::$instantiator) {
+            return self::$instantiator = new Instantiator();
+        }
+
+        return self::$instantiator;
     }
 }

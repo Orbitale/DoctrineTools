@@ -3,7 +3,6 @@ Orbitale Doctrine Tools
 
 This library is composed of multiple tools to be used with the Doctrine ORM.
 
-
 ### Documentation
 
 * [Installation](#installation)
@@ -83,24 +82,25 @@ Here is a small example of a new fixtures class:
 
 namespace AppBundle\DataFixtures\ORM;
 
+use App\Entity\Post;
 use Orbitale\Component\DoctrineTools\AbstractFixture;
+use Doctrine\Bundle\FixturesBundle\ORMFixtureInterface;
 
-class PostFixtures extends AbstractFixture
+class PostFixtures extends AbstractFixture implements ORMFixtureInterface
 {
-
-    public function getEntityClass() {
-        return 'AppBundle\Entity\Post';
+    public function getEntityClass(): string
+    {
+        return Post::class;
     }
-    
-    public function getObjects() {
+
+    public function getObjects(): array
+    {
         return [
-            ['id' => 1, 'title' => 'First post', 'description' => 'Lorem ipsum'],
-            ['id' => 2, 'title' => 'Second post', 'description' => 'muspi meroL'],
+            ['title' => 'First post', 'description' => 'Lorem ipsum'],
+            ['title' => 'Second post', 'description' => 'muspi meroL'],
         ];
     }
-
 }
-
 ```
 
 ### Using a callable to get a reference
@@ -112,7 +112,7 @@ For this, first, you should set the `flushEveryXIterations` option to `1` (view 
 And next, you can set a `callable` element as the value of your object so you can interact manually with the injected object
  as 1st argument, and the `AbstractFixture` object as 2nd argument.
 
-The `ObjectManager` is also injected as 3rd argument in case you need to do some specific requests or query through another
+The `EntityManagerInterface` is also injected as 3rd argument in case you need to do some specific requests or query through another
  table.
 
 Example here:
@@ -120,62 +120,66 @@ Example here:
 ```php
 <?php
 
-namespace AppBundle\DataFixtures\ORM;
+namespace App\DataFixtures\ORM;
 
+use App\Entity\Post;
 use Orbitale\Component\DoctrineTools\AbstractFixture;
-use Doctrine\Common\Persistence\ObjectManager;
+use Doctrine\Bundle\FixturesBundle\ORMFixtureInterface;
+use Doctrine\ORM\EntityManagerInterface;
 
-class PostFixtures extends AbstractFixture
+class PostFixtures extends AbstractFixture implements ORMFixtureInterface
 {
-
-    public function getEntityClass() {
-        return 'AppBundle\Entity\Post';
+    public function getEntityClass(): string
+    {
+        return Post::class;
     }
 
     /**
      * With this, we can retrieve a Post reference with this method:
      * $this->getReference('posts-1');
      * where '1' is the post id.
+     * Only works with same object if it's flushed on every iteration.
      */
-    public function getReferencePrefix() {
+    public function getReferencePrefix(): ?string
+    {
         return 'posts-';
     }
 
     /**
      * Set this to 1 so the first post is always persisted before the next one.
+     * This is mandatory as we are referencing the same object. 
+     * If we had to use a reference to another object, only "getOrder()" would have to be overriden. 
      */
-    public function flushOnEveryXIterations() {
+    public function flushEveryXIterations(): int 
+    {
         return 1;
     }
 
-    public function getObjects() {
+    public function getObjects(): array
+    {
         return [
             ['id' => 1, 'title' => 'First post', 'parent' => null],
             [
-                'id' => 2,
                 'title' => 'Second post',
-                'parent' => function(Post $object, AbstractFixture $fixture, ObjectManager $manager) {
-                    $ref = $fixture->getReference('posts-1');
-                    $object->setParent($ref); // This is often needed if you don't use cascade persist
-                    return $ref;
+                'parent' => function(Post $object, AbstractFixture $fixture, EntityManagerInterface $manager) {
+                    return $fixture->getReference('posts-1');
                 },
             ],
         ];
     }
-
 }
-
 ```
 
 This allows perfect synchronicity when dealing with self-referencing relations.
 
 ### Methods of the `AbstractFixture` class that can be overriden:
 
-* `getOrder()` to change the order in which the fixtures will be loaded.
-* `getReferencePrefix()` to add a reference in the Fixtures' batch so you can use them later.
+* `getOrder()` (default `0`) to change the order in which the fixtures will be loaded.
+* `getReferencePrefix()` (default `null`) to add a reference in the Fixtures' batch so you can use them later.
   References are stored as `{referencePrefix}-{id|__toString()}`.
-* `flushEveryXIterations()` to flush in batches instead of flushing only once at the end of all fixtures persist.
-* `searchForMatchingIds()` to check that an ID exists in database and therefore not insert it back if it does.
+* `getMethodNameForReference()` (default `getId`) to specify which method on the object is used to specify the 
+  reference. Defaults to `getId` and **always falls back** to `__toString()` if exists.
+* `flushEveryXIterations()` (default `0`) to flush in batches instead of flushing only once at the end of all fixtures persist.
 * `disableLogger()` to disable SQL queries logging, useful to save memory at runtime.
 
 This way, 2 objects are automatically persisted in the database, and they're all identified with their ID.

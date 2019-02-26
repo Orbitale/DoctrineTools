@@ -13,8 +13,9 @@
         }
     ],
     "require": {
-        "php": "^7.1",
-        "doctrine/orm": "^2.5"
+        "php": "^7.2",
+        "doctrine/orm": "^2.6",
+        "doctrine/instantiator": "^1.1"
     },
     "require-dev": {
         "phpunit/phpunit": "^6.0",
@@ -22,10 +23,11 @@
     },
     "suggest": {
         "doctrine/data-fixtures": "To use the nice AbstractFixture class",
-        "doctrine/doctrine-fixtures-bundle": "To use the AbstractFixture class inside a Symfony app",
-        "symfony/property-access": "To use property accessor with fixtures"
+        "doctrine/doctrine-fixtures-bundle": "To use the AbstractFixture class inside a Symfony app"
     },
     "autoload": {
-        "psr-4": { "Orbitale\\Component\\DoctrineTools\\" : "" }
+        "psr-4": {
+            "Orbitale\\Component\\DoctrineTools\\" : ""
+        }
     }
 }
