@@ -13,6 +13,7 @@ namespace Orbitale\Component\DoctrineTools;
 
 use Closure;
 use Doctrine\Common\DataFixtures\AbstractFixture as BaseAbstractFixture;
+use Doctrine\ORM\Id\AssignedGenerator;
 use Doctrine\Common\DataFixtures\OrderedFixtureInterface;
 use Doctrine\Common\Persistence\ObjectManager;
 use Doctrine\Instantiator\Instantiator;
@@ -118,6 +119,18 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     private function fixtureObject(array $data): void
     {
         $obj = $this->createNewInstance($data);
+
+        // Sometimes keys are specified in fixtures.
+        // We must make sure Doctrine will force them to be saved.
+        // Support for non-composite primary keys only.
+        // /!\ Be careful, this will override the generator type for ALL objects of the same entity class!
+        //     This means that it _may_ break objects for which ids are not provided in the fixtures.
+        $metadata = $this->manager->getClassMetadata($this->getEntityClass());
+        $primaryKey = $metadata->getIdentifierFieldNames();
+        if (1 === \count($primaryKey) && isset($data[$primaryKey[0]])) {
+            $metadata->setIdGeneratorType($metadata::GENERATOR_TYPE_NONE);
+            $metadata->setIdGenerator(new AssignedGenerator());
+        }
 
         // And finally we persist the item
         $this->manager->persist($obj);
