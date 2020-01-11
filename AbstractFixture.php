@@ -137,8 +137,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
 
         // If we need to flush it, then we do it too.
         if (
-            $this->numberOfIteratedObjects > 0
-            && $this->flushEveryXIterations() > 0
+            $this->flushEveryXIterations() > 0
             && $this->numberOfIteratedObjects % $this->flushEveryXIterations() === 0
         ) {
             $this->manager->flush();
