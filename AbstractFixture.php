@@ -15,11 +15,12 @@ use Closure;
 use Doctrine\Common\DataFixtures\AbstractFixture as BaseAbstractFixture;
 use Doctrine\ORM\Id\AssignedGenerator;
 use Doctrine\Common\DataFixtures\OrderedFixtureInterface;
-use Doctrine\Common\Persistence\ObjectManager;
+use Doctrine\Persistence\ObjectManager;
 use Doctrine\Instantiator\Instantiator;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\EntityRepository;
 use ReflectionClass;
+use function count;
 use function method_exists;
 use RuntimeException;
 use function sprintf;
@@ -90,7 +91,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
 
         $objects = $this->getObjects();
 
-        $this->totalNumberOfObjects = \count($objects);
+        $this->totalNumberOfObjects = count($objects);
 
         $this->numberOfIteratedObjects = 0;
         foreach ($objects as $data) {
@@ -114,7 +115,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
     /**
      * Creates the object and persist it in database.
      *
-     * @param object $data
+     * @param array $data
      */
     private function fixtureObject(array $data): void
     {
@@ -127,7 +128,7 @@ abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFix
         //     This means that it _may_ break objects for which ids are not provided in the fixtures.
         $metadata = $this->manager->getClassMetadata($this->getEntityClass());
         $primaryKey = $metadata->getIdentifierFieldNames();
-        if (1 === \count($primaryKey) && isset($data[$primaryKey[0]])) {
+        if (1 === count($primaryKey) && isset($data[$primaryKey[0]])) {
             $metadata->setIdGeneratorType($metadata::GENERATOR_TYPE_NONE);
             $metadata->setIdGenerator(new AssignedGenerator());
         }
