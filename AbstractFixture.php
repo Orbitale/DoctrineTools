@@ -37,10 +37,10 @@ use function sprintf;
 abstract class AbstractFixture extends BaseAbstractFixture implements OrderedFixtureInterface
 {
     /** @var EntityManagerInterface */
-    private $manager;
+    protected $manager;
 
     /** @var EntityRepository */
-    private $repo;
+    protected $repo;
 
     /** @var int */
     private $totalNumberOfObjects = 0;
