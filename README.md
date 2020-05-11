@@ -1,3 +1,5 @@
+## :warning: This package is abandoned, please use [Orbitale/ArrayFixture](https://github.com/Orbitale/ArrayFixture) instead
+
 Orbitale Doctrine Tools
 =======================
 
